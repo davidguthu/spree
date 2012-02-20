@@ -39,7 +39,7 @@ module SpreeCore
           Calculator::PerItem,
           Calculator::SalesTax,
           Calculator::Vat,
-          Calculator::PriceBucket
+          Calculator::PriceSack
         ].each{|c_model|
           begin
             c_model.register if c_model.table_exists?
