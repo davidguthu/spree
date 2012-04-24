@@ -19,11 +19,21 @@ describe Spree::Product do
     product.master.should_not be_nil
   end
 
-  context "product instance" do
-    let(:product) do
-      product = stub_model(Spree::Product)
-      product.stub :master => stub_model(Spree::Variant)
-      product
+  context 'product instance' do
+    let(:product) { Factory(:product) }
+
+    context '#duplicate' do
+      before do
+        product.stub :taxons => [Factory(:taxon)]
+      end
+
+      it 'duplicates product' do
+        clone = product.duplicate
+        clone.name.should == 'COPY OF ' + product.name
+        clone.master.sku.should == 'COPY OF ' + product.master.sku
+        clone.taxons.should == product.taxons
+        clone.images.size.should == product.images.size
+      end
     end
 
     context "#on_hand" do
@@ -46,25 +56,6 @@ describe Spree::Product do
     end
   end
 
-  context "shoulda validations" do
-    let(:product) {Factory(:product)}
-    it { should belong_to(:tax_category) }
-    it { should belong_to(:shipping_category) }
-    it { should have_many(:product_option_types) }
-    it { should have_many(:option_types) }
-    it { should have_many(:product_properties) }
-    it { should have_many(:properties) }
-    it { should have_many(:images) }
-    it { should have_and_belong_to_many(:product_groups) }
-    it { should have_and_belong_to_many(:taxons) }
-    it "should validate price" do
-      product.should be_valid
-    end
-    # it { should validate_presence_of(:price) }
-    it { should validate_presence_of(:permalink) }
-    it { should have_valid_factory(:product) }
-  end
-
   context "validations" do
     context "find_by_param" do
 
@@ -84,6 +75,32 @@ describe Spree::Product do
 
       context "permalink should be incremented until the value is not taken when there are more than 10 products" do
         before do
+          @products = 0.upto(11).map do
+            Factory(:product, :name => 'foo')
+          end
+        end
+        it "should have valid permalink" do
+          @products[11].permalink.should == 'foo-11'
+        end
+      end
+
+      context "permalink should be incremented until the value is not taken for similar names" do
+        before do
+          @other_product = Factory(:product, :name => 'foo bar')
+          @product1 = Factory(:product, :name => 'foo')
+          @product2 = Factory(:product, :name => 'foo')
+          @product3 = Factory(:product, :name => 'foo')
+        end
+        it "should have valid permalink" do
+          @product1.permalink.should == 'foo'
+          @product2.permalink.should == 'foo-1'
+          @product3.permalink.should == 'foo-2'
+        end
+      end
+
+      context "permalink should be incremented until the value is not taken for similar names when there are more than 10 products" do
+        before do
+          @other_product = Factory(:product, :name => 'foo a')
           @products = 0.upto(11).map do
             Factory(:product, :name => 'foo')
           end
@@ -224,7 +241,8 @@ describe Spree::Product do
       before do
         Spree::Config.set :track_inventory_levels => true
         product.master.stub :on_hand => 0
-        product.stub :variants => [stub_model(Spree::Variant, :on_hand => 100)]
+        product.variants.build(:on_hand => 100)
+        product.stub :has_variants? => true
       end
       specify { product.has_stock?.should be_true }
     end

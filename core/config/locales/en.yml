@@ -24,9 +24,9 @@ en:
         city: City
         country: "Country"
         firstname: "First Name"
-        first_name_begins_with: "First Name Begins With"
+        first_name_start: "First Name Begins With"
         lastname: "Last Name"
-        last_name_begins_with: "Last Name Begins With"
+        last_name_start: "Last Name Begins With"
         phone: Phone
         state: "State"
         zipcode: "Zip Code"
@@ -90,15 +90,6 @@ en:
         on_hand: "On Hand"
         shipping_category: "Shipping Category"
         tax_category: "Tax Category"
-      spree/product_group:
-        name: Name
-        product_count: "Product count"
-        product_scopes: "Product scopes"
-        products: "Products"
-        url: URL
-      spree/product_scope:
-        arguments: "Arguments"
-        description: "Description"
       spree/property:
         name: Name
         presentation: Presentation
@@ -172,9 +163,6 @@ en:
       spree/product:
         one: Product
         other: Products
-      spree/product_group:
-        one: "Product group"
-        other: "Product groups"
       spree/property:
         one: Property
         other: Properties
@@ -292,7 +280,8 @@ en:
   cancel_my_account: Cancel my account
   cancel_my_account_description: "Unhappy?"
   canceled: Canceled
-  cannot_create_returns: Cannot create returns as this order no shipped units.
+  cannot_create_payment_without_payment_methods: You cannot create a payment for an order without any payment methods defined.
+  cannot_create_returns: Cannot create returns as this order has no shipped units.
   cannot_perform_operation: "Cannot perform requested operation"
   capture: Capture
   card_code: "Card Code"
@@ -332,7 +321,6 @@ en:
   country_based: "Country Based"
   create: Create
   create_a_new_account: "Create a new account"
-  create_product_group_from_products: Create a new product group from these products
   create_user_account: Create User Account
   created_successfully: "Created Successfully"
   credit: Credit
@@ -399,6 +387,7 @@ en:
   enter_exactly_as_shown_on_card: Please enter exactly as shown on the card
   enter_at_least_five_letters: Enter at least five letters of customer name
   enter_password_to_confirm: "(we need your current password to confirm your changes)"
+  enter_token: Enter Token
   environment: "Environment"
   error: error
   errors:
@@ -496,6 +485,7 @@ en:
   item_total: "Item Total"
   last_name: "Last Name"
   last_name_begins_with: "Last Name Begins With"
+  learn_more: Learn More
   leave_blank_to_not_change: "(leave blank if you don't want to change it)"
   list: List
   listing_categories: "Listing Categories"
@@ -686,6 +676,7 @@ en:
   phone: Phone
   place_order: Place Order
   please_create_user: "Please create a user account"
+  please_define_payment_methods: "Please define some payment methods first."
   powered_by: "Powered by"
   presentation: Presentation
   preview: Preview
@@ -720,18 +711,12 @@ en:
         description: "Scopes for selecting products based on option and property values"
         name: Values
     scopes:
-      ascend_by_master_price:
-        name: Ascend by product master price
       ascend_by_name:
         name: Ascend by product name
       ascend_by_updated_at:
         name: Ascend by actualization date
-      descend_by_master_price:
-        name: Descend by product master price
       descend_by_name:
         name: Descend by product name
-      descend_by_popularity:
-        name: Sort by popularity(most popular first)
       descend_by_updated_at:
         name: Descend by actualization date
       in_name:

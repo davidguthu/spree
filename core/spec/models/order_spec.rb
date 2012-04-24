@@ -9,12 +9,19 @@ end
 describe Spree::Order do
   before(:each) do
     reset_spree_preferences
-    Spree::Gateway::Test.create(:name => 'Test', :active => true, :environment => 'test', :description => 'foofah')
+    Spree::Gateway.create({:name => 'Test', :active => true, :environment => 'test', :description => 'foofah'}, :without_protection => true)
+  end
+
+  let(:user) { stub_model(Spree::User, :email => "spree@example.com") }
+  let(:order) { stub_model(Spree::Order, :user => user) }
+  let(:gateway) { Spree::Gateway::Bogus.new({:name => "Credit Card", :active => true}, :without_protection => true) }
+
+  before do
+    Spree::Gateway.stub :current => gateway
+    Spree::User.stub(:current => mock_model(Spree::User, :id => 123))
   end
 
   context 'validation' do
-    it { should have_valid_factory(:order) }
-
     context "when @use_billing is populated" do
       before do
         order.bill_address = Factory(:address)
@@ -57,15 +64,15 @@ describe Spree::Order do
         end
       end
     end
-  end
 
-  let(:user) { stub_model(Spree::User, :email => "spree@example.com") }
-  let(:order) { stub_model(Spree::Order, :user => user) }
-  let(:gateway) { Spree::Gateway::Bogus.new(:name => "Credit Card", :active => true) }
-
-  before do
-    Spree::Gateway.stub :current => gateway
-    Spree::User.stub(:current => mock_model(Spree::User, :id => 123))
+    context "email validation" do
+      # Regression test for #1238
+      it "o'brien@gmail.com is a valid email address" do
+        order.state = 'address'
+        order.email = "o'brien@gmail.com"
+        order.should be_valid
+      end
+    end
   end
 
   context "#products" do
@@ -587,17 +594,18 @@ describe Spree::Order do
 
   context "#cancel" do
     let!(:variant) { stub_model(Spree::Variant, :on_hand => 0) }
-    let!(:inventory_unit) { stub_model(Spree::InventoryUnit, :variant => variant) }
+    let!(:inventory_units) { [stub_model(Spree::InventoryUnit, :variant => variant),
+                              stub_model(Spree::InventoryUnit, :variant => variant) ]}
     let!(:shipment) do
       shipment = stub_model(Spree::Shipment)
-      shipment.stub :inventory_units => [inventory_unit]
+      shipment.stub :inventory_units => inventory_units
       order.stub :shipments => [shipment]
       shipment
     end
 
     before do
       order.email = user.email
-      order.stub :line_items => [stub_model(Spree::LineItem, :variant => variant, :quantity => 1)]
+      order.stub :line_items => [stub_model(Spree::LineItem, :variant => variant, :quantity => 2)]
       order.line_items.stub :find_by_variant_id => order.line_items.first
 
       order.stub :completed? => true
@@ -622,7 +630,7 @@ describe Spree::Order do
 
       # Regression fix for #729
       specify do
-        Spree::InventoryUnit.should_receive(:decrease).with(order, variant, 1)
+        Spree::InventoryUnit.should_receive(:decrease).with(order, variant, 2).once
         order.cancel!
       end
 
@@ -651,16 +659,17 @@ describe Spree::Order do
 
       before do
         shipment = stub_model(Spree::Shipment)
-        line_item = stub_model(Spree::LineItem, :variant => variant, :quantity => 1)
+        line_item = stub_model(Spree::LineItem, :variant => variant, :quantity => 2)
         order.stub :line_items => [line_item]
         order.line_items.stub :find_by_variant_id => line_item
 
         order.stub :shipments => [shipment]
-        shipment.stub :inventory_units => [stub_model(Spree::InventoryUnit, :variant => variant)]
+        shipment.stub :inventory_units => [stub_model(Spree::InventoryUnit, :variant => variant),
+                                           stub_model(Spree::InventoryUnit, :variant => variant) ]
       end
 
       specify do
-        Spree::InventoryUnit.should_receive(:increase).with(order, variant, 1)
+        Spree::InventoryUnit.should_receive(:increase).with(order, variant, 2).once
         order.resume!
       end
     end
@@ -706,13 +715,28 @@ describe Spree::Order do
     end
 
     it "should return shipping methods sorted by cost" do
-      order.rate_hash.should == [{:shipping_method => shipping_method_2, :cost => 0.0, :name => "Ground Shipping", :id => 2},
-                                  {:shipping_method => shipping_method_1, :cost => 10.0, :name => "Air Shipping", :id => 1}]
+      rate_1, rate_2 = order.rate_hash
+
+      rate_1.shipping_method.should == shipping_method_2
+      rate_1.cost.should == 0.0
+      rate_1.name.should == "Ground Shipping"
+      rate_1.id.should == 2
+
+      rate_2.shipping_method.should == shipping_method_1
+      rate_2.cost.should == 10.0
+      rate_2.name.should == "Air Shipping"
+      rate_2.id.should == 1
     end
 
     it "should not return shipping methods with nil cost" do
       shipping_method_1.calculator.stub(:compute).and_return(nil)
-      order.rate_hash.should == [{:shipping_method => shipping_method_2, :cost => 0.0, :name => "Ground Shipping", :id => 2}]
+      order.rate_hash.count.should == 1
+      rate_1 = order.rate_hash.first
+
+      rate_1.shipping_method.should == shipping_method_2
+      rate_1.cost.should == 0
+      rate_1.name.should == "Ground Shipping"
+      rate_1.id.should == 2
     end
 
   end
@@ -848,8 +872,8 @@ describe Spree::Order do
 
     context "when only one line item has adjustments" do
       before do
-        @adj1 = line_item1.adjustments.create(:amount => 2, :source => line_item1, :label => "VAT 5%")
-        @adj2 = line_item1.adjustments.create(:amount => 5, :source => line_item1, :label => "VAT 10%")
+        @adj1 = line_item1.adjustments.create({:amount => 2, :source => line_item1, :label => "VAT 5%"}, :without_protection => true)
+        @adj2 = line_item1.adjustments.create({:amount => 5, :source => line_item1, :label => "VAT 10%"}, :without_protection => true)
       end
 
       it "should return the adjustments for that line item" do
@@ -859,8 +883,8 @@ describe Spree::Order do
 
     context "when more than one line item has adjustments" do
       before do
-        @adj1 = line_item1.adjustments.create(:amount => 2, :source => line_item1, :label => "VAT 5%")
-        @adj2 = line_item2.adjustments.create(:amount => 5, :source => line_item2, :label => "VAT 10%")
+        @adj1 = line_item1.adjustments.create({:amount => 2, :source => line_item1, :label => "VAT 5%"}, :without_protection => true)
+        @adj2 = line_item2.adjustments.create({:amount => 5, :source => line_item2, :label => "VAT 10%"}, :without_protection => true)
       end
 
       it "should return the adjustments for each line item" do

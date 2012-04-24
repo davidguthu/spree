@@ -22,6 +22,8 @@
 #
 module Spree
   class Adjustment < ActiveRecord::Base
+    attr_accessible :amount, :label
+
     belongs_to :adjustable, :polymorphic => true
     belongs_to :source, :polymorphic => true
     belongs_to :originator, :polymorphic => true
@@ -73,9 +75,9 @@ module Spree
 
     private
 
-    def update_adjustable
-      adjustable.update! if adjustable.is_a? Order
-    end
+      def update_adjustable
+        adjustable.update! if adjustable.is_a? Order
+      end
 
   end
 end

@@ -11,11 +11,10 @@ module Spree
     alias :members :zone_members
     accepts_nested_attributes_for :zone_members, :allow_destroy => true, :reject_if => proc { |a| a['zoneable_id'].blank? }
 
-    # WARNING during tets class method .global is declared to indicate global Zone to use with tests
+    attr_accessible :name, :description, :default_tax, :kind, :zone_members, :zone_members_attributes
 
-    #attr_accessor :type
     def kind
-      member = self.members.last
+      member = members.last
 
       case member && member.zoneable_type
       when 'Spree::State' then 'state'
@@ -26,13 +25,6 @@ module Spree
 
     def kind=(value)
       # do nothing - just here to satisfy the form
-    end
-
-    # TODO: Remove this method after 1.0
-    # alias to the new include? method
-    def in_zone?(address)
-      ActiveSupport::Deprecation.warn '#in_zone? is deprecated and will be removed in Spree > 1.0. Use #include? instead.'
-      include?(address)
     end
 
     def include?(address)
@@ -54,7 +46,7 @@ module Spree
     # Returns the matching zone with the highest priority zone type (State, Country, Zone.)
     # Returns nil in the case of no matches.
     def self.match(address)
-      return unless matches = self.order("created_at").select { |zone| zone.include? address }
+      return unless matches = self.order('created_at').select { |zone| zone.include? address }
 
       ['state', 'country'].each do |zone_kind|
         if match = matches.detect { |zone| zone_kind == zone.kind }
@@ -95,16 +87,16 @@ module Spree
     # Indicates whether the specified zone falls entirely within the zone performing
     # the check.
     def contains?(target)
-      return false if self.kind == "state" && target.kind == "country"
-      return false if self.zone_members.empty? || target.zone_members.empty?
+      return false if kind == 'state' && target.kind == 'country'
+      return false if zone_members.empty? || target.zone_members.empty?
 
-      if self.kind == target.kind
+      if kind == target.kind
         target.zoneables.each do |target_zoneable|
-          return false unless self.zoneables.include?(target_zoneable)
+          return false unless zoneables.include?(target_zoneable)
         end
       else
         target.zoneables.each do |target_state|
-          return false unless self.zoneables.include?(target_state.country)
+          return false unless zoneables.include?(target_state.country)
         end
       end
       true
@@ -113,15 +105,15 @@ module Spree
     private
       def remove_defunct_members
         zone_members.each do |zone_member|
-          zone_member.destroy if zone_member.zoneable_id.nil? || zone_member.zoneable_type != "Spree::#{self.kind.capitalize}"
+          zone_member.destroy if zone_member.zoneable_id.nil? || zone_member.zoneable_type != "Spree::#{kind.capitalize}"
         end
       end
 
       def remove_previous_default
-        return unless self.default_tax
+        return unless default_tax
 
         Zone.all.each do |zone|
-          zone.update_attribute "default_tax", false unless zone == self
+          zone.update_attribute 'default_tax', false unless zone == self
         end
       end
   end

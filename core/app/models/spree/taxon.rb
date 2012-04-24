@@ -6,6 +6,8 @@ module Spree
     has_and_belongs_to_many :products, :join_table => 'spree_products_taxons'
     before_create :set_permalink
 
+    attr_accessible :name, :parent_id, :position, :description, :permalink
+
     validates :name, :presence => true
     has_attached_file :icon,
       :styles => { :mini => '32x32>', :normal => '128x128>' },
@@ -31,23 +33,18 @@ module Spree
     # Creates permalink based on Stringex's .to_url method
     def set_permalink
       if parent_id.nil?
-        self.permalink = name.to_url if self.permalink.blank?
+        self.permalink = name.to_url if permalink.blank?
       else
         parent_taxon = Taxon.find(parent_id)
-        self.permalink = [parent_taxon.permalink, (self.permalink.blank? ? name.to_url : self.permalink.split('/').last)].join('/')
+        self.permalink = [parent_taxon.permalink, (permalink.blank? ? name.to_url : permalink.split('/').last)].join('/')
       end
     end
 
     def active_products
-      scope = self.products.active
+      scope = products.active
       scope = scope.on_hand unless Spree::Config[:show_zero_stock_products]
       scope
     end
 
-    private
-      # obsolete, kept for backwards compat
-      def escape(str)
-        str.blank? ? '' : str.to_url
-      end
   end
 end

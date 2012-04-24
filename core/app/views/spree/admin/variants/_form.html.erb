@@ -30,11 +30,11 @@
       <%= f.text_field :on_hand %></p>
     <% end %>
   </div>
-  <div class="right">
-
-    <% Spree::Variant.additional_fields.select{|af| af[:only].nil? || af[:only].include?(:variant) }.each do |field| %>
-      <%= render :partial => 'spree/admin/shared/additional_field', :locals => { :field => field, :f => f } %>
+  <div class="right" data-hook="admin_variant_form_additional_fields">
+    <% [:weight, :height, :width, :depth].each do |field| %>
+      <p data-hook="<%= field %>"><%= f.label field, t(field) %>:<br />
+      <% value = number_with_precision(@variant.send(field), :precision => 2) %>
+      <%= f.text_field field, :value => value %></p>
     <% end %>
-
   </div>
 </div>

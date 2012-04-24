@@ -25,11 +25,11 @@ module Spree
 
       end
 
-      # We need to reload the routes here due to how Spree sets them up
-      # The different facets of Spree, (auth, promo, etc.) appends/prepends routes to Core
+      # We need to reload the routes here due to how Spree sets them up.
+      # The different facets of Spree (auth, promo, etc.) append/prepend routes to Core
       # *after* Core has been loaded.
       #
-      # So we wait until after initialization is complete to do one final reload
+      # So we wait until after initialization is complete to do one final reload.
       # This then makes the appended/prepended routes available to the application.
       config.after_initialize do
         Rails.application.routes_reloader.reload!
@@ -71,11 +71,7 @@ module Spree
 
       # sets the manifests / assets to be precompiled
       initializer "spree.assets.precompile" do |app|
-        app.config.assets.precompile += ['store/all.*', 'admin/all.*', 'admin/orders/edit_form.js', 'admin/orders/address_states.js', 'jqPlot/excanvas.min.js', 'admin/images/new.js', 'jquery.jstree/themes/apple/*']
-      end
-
-      initializer "spree.asset.pipeline" do |app|
-        app.config.assets.debug = false
+        Spree::Core::Engine.add_assets_to_precompile_list!(app)
       end
 
       initializer "spree.mail.settings" do |app|
@@ -83,6 +79,10 @@ module Spree
           Spree::Core::MailSettings.init
           Mail.register_interceptor(Spree::Core::MailInterceptor)
         end
+      end
+
+      def self.add_assets_to_precompile_list!(app)
+        app.config.assets.precompile += ['store/all.*', 'admin/all.*', 'admin/orders/edit_form.js', 'admin/address_states.js', 'jqPlot/excanvas.min.js', 'admin/images/new.js', 'jquery.jstree/themes/apple/*']
       end
     end
   end

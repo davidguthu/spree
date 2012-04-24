@@ -1,7 +1,19 @@
 module Spree
   module BaseHelper
+
+    # Defined because Rails' current_page? helper is not working when Spree is mounted at root.
+    def current_spree_page?(url)
+      path = request.fullpath.gsub(/^\/\//, '/')
+      if url.is_a?(String)
+        return path == url
+      elsif url.is_a?(Hash)
+        return path == spree.url_for(url)
+      end
+      return false
+    end
+
     def link_to_cart(text = nil)
-      return "" if current_page?(cart_path)
+      return "" if current_spree_page?(cart_path)
 
       text = text ? h(text) : t('cart')
       css_class = nil
@@ -36,7 +48,6 @@ module Spree
 
     # human readable list of variant options
     def variant_options(v, allow_back_orders = Spree::Config[:allow_backorders], include_style = true)
-      ActiveSupport::Deprecation.warn('variant_options method is deprecated, and will be removed in 0.80.0', caller)
       list = v.options_text
 
       # We shouldn't show out of stock if the product is infact in stock
@@ -53,6 +64,11 @@ module Spree
     end
 
     Spree::Image.attachment_definitions[:attachment][:styles].each do |style, v|
+      # Defines these methods by default:
+      # def mini_image
+      # def small_image
+      # def product_image
+      # def large_image
       define_method "#{style}_image" do |product, *options|
         options = options.first || {}
         if product.images.empty?
@@ -89,13 +105,10 @@ module Spree
     end
 
     def flash_messages
-      [:notice, :error].map do |msg_type|
-        if flash[msg_type]
-          content_tag :div, flash[msg_type], :class => "flash #{msg_type}"
-        else
-          ''
-        end
-      end.join("\n").html_safe
+      flash.each do |msg_type, text|
+        concat(content_tag :div, text, :class => "flash #{msg_type}")
+      end
+      nil
     end
 
     def breadcrumbs(taxon, separator="&nbsp;&raquo;&nbsp;")
@@ -110,7 +123,7 @@ module Spree
         crumbs << content_tag(:li, content_tag(:span, t(:products)))
       end
       crumb_list = content_tag(:ul, raw(crumbs.flatten.map{|li| li.mb_chars}.join), :class => 'inline')
-      content_tag(:div, crumb_list, :id => 'breadcrumbs')
+      content_tag(:nav, crumb_list, :id => 'breadcrumbs')
     end
 
     def taxons_tree(root_taxon, current_taxon, max_level = 1)
@@ -158,6 +171,14 @@ module Spree
       else
         return current_order.item_count
       end
+    end
+
+    def gem_available?(name)
+       Gem::Specification.find_by_name(name)
+    rescue Gem::LoadError
+       false
+    rescue
+       Gem.available?(name)
     end
   end
 end

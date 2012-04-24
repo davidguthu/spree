@@ -1,3 +1,5 @@
+require 'spree/core/validators/email'
+
 module Spree
   class Order < ActiveRecord::Base
     attr_accessible :line_items, :bill_address_attributes, :ship_address_attributes, :payments_attributes,
@@ -5,8 +7,15 @@ module Spree
                     :shipping_method_id, :email, :use_billing, :special_instructions
 
     belongs_to :user
+
     belongs_to :bill_address, :foreign_key => 'bill_address_id', :class_name => 'Spree::Address'
+    alias_method :billing_address, :bill_address
+    alias_method :billing_address=, :bill_address=
+
     belongs_to :ship_address, :foreign_key => 'ship_address_id', :class_name => 'Spree::Address'
+    alias_method :shipping_address, :ship_address
+    alias_method :shipping_address=, :ship_address=
+
     belongs_to :shipping_method
 
     has_many :state_changes, :as => :stateful
@@ -30,7 +39,7 @@ module Spree
     after_create :create_tax_charge!
 
     # TODO: validate the format of the email as well (but we can't rely on authlogic anymore to help with validation)
-    validates :email, :presence => true, :format => /^([\w\.%\+\-]+)@([\w\-]+\.)+([\w]{2,})$/i, :if => :require_email
+    validates :email, :presence => true, :email => true, :if => :require_email
     validate :has_available_shipment
     validate :has_available_payment
 
@@ -50,41 +59,6 @@ module Spree
 
     class_attribute :update_hooks
     self.update_hooks = Set.new
-
-    # Use this method in other gems that wish to register their own custom logic that should be called after Order#updat
-    def self.register_update_hook(hook)
-      self.update_hooks.add(hook)
-    end
-
-    # For compatiblity with Calculator::PriceSack
-    def amount
-      line_items.map(&:amount).sum
-    end
-
-    def to_param
-      number.to_s.to_url.upcase
-    end
-
-    def completed?
-      !! completed_at
-    end
-
-    # Indicates whether or not the user is allowed to proceed to checkout.  Currently this is implemented as a
-    # check for whether or not there is at least one LineItem in the Order.  Feel free to override this logic
-    # in your own application if you require additional steps before allowing a checkout.
-    def checkout_allowed?
-      line_items.count > 0
-    end
-
-    # Is this a free order in which case the payment step should be skipped
-    def payment_required?
-      total.to_f > 0.0
-    end
-
-    # Indicates the number of items in the order
-    def item_count
-      line_items.map(&:quantity).sum
-    end
 
     # order state machine (see http://github.com/pluginaweek/state_machine/tree/master for details)
     state_machine :initial => 'cart', :use_transactions => false do
@@ -134,6 +108,41 @@ module Spree
       after_transition :to => 'resumed',  :do => :after_resume
       after_transition :to => 'canceled', :do => :after_cancel
 
+    end
+
+    # Use this method in other gems that wish to register their own custom logic that should be called after Order#updat
+    def self.register_update_hook(hook)
+      self.update_hooks.add(hook)
+    end
+
+    # For compatiblity with Calculator::PriceSack
+    def amount
+      line_items.map(&:amount).sum
+    end
+
+    def to_param
+      number.to_s.to_url.upcase
+    end
+
+    def completed?
+      !! completed_at
+    end
+
+    # Indicates whether or not the user is allowed to proceed to checkout.  Currently this is implemented as a
+    # check for whether or not there is at least one LineItem in the Order.  Feel free to override this logic
+    # in your own application if you require additional steps before allowing a checkout.
+    def checkout_allowed?
+      line_items.count > 0
+    end
+
+    # Is this a free order in which case the payment step should be skipped
+    def payment_required?
+      total.to_f > 0.0
+    end
+
+    # Indicates the number of items in the order
+    def item_count
+      line_items.map(&:quantity).sum
     end
 
     # Indicates whether there are any backordered InventoryUnits associated with the Order.
@@ -261,21 +270,6 @@ module Spree
         current_item.price   = variant.price
         self.line_items << current_item
       end
-
-      # populate line_items attributes for additional_fields entries
-      # that have populate => [:line_item]
-      Variant.additional_fields.select { |f| !f[:populate].nil? && f[:populate].include?(:line_item) }.each do |field|
-        value = ''
-
-        if field[:only].nil? || field[:only].include?(:variant)
-          value = variant.send(field[:name].gsub(' ', '_').downcase)
-        elsif field[:only].include?(:product)
-          value = variant.product.send(field[:name].gsub(' ', '_').downcase)
-        end
-        current_item.update_attribute(field[:name].gsub(' ', '_').downcase, value)
-      end
-
-      current_item
     end
 
     # FIXME refactor this method and implement validation using validates_* utilities
@@ -315,8 +309,8 @@ module Spree
     # include taxes then price adjustments are created instead.
     def create_tax_charge!
       # destroy any previous adjustments (eveything is recalculated from scratch)
-      adjustments.tax.each { |e| e.destroy }
-      price_adjustments.each { |p| p.destroy }
+      adjustments.tax.each(&:destroy)
+      price_adjustments.each(&:destroy)
 
       TaxRate.match(self).each { |rate| rate.adjust(self) }
     end
@@ -327,10 +321,10 @@ module Spree
       if shipment.present?
         shipment.update_attributes!(:shipping_method => shipping_method)
       else
-        self.shipments << Shipment.create!(:order => self,
+        self.shipments << Shipment.create!({ :order => self,
                                           :shipping_method => shipping_method,
                                           :address => self.ship_address,
-                                          :inventory_units => self.inventory_units)
+                                          :inventory_units => self.inventory_units}, :without_protection => true)
       end
 
     end
@@ -372,7 +366,7 @@ module Spree
         :next_state     => 'complete',
         :name           => 'order' ,
         :user_id        => (User.respond_to?(:current) && User.current.try(:id)) || self.user_id
-      })
+      }, :without_protection => true)
     end
 
     # Helper methods for checkout steps
@@ -389,12 +383,11 @@ module Spree
     def rate_hash
       @rate_hash ||= available_shipping_methods(:front_end).collect do |ship_method|
         next unless cost = ship_method.calculator.compute(self)
-        { :id => ship_method.id,
-          :shipping_method => ship_method,
-          :name => ship_method.name,
-          :cost => cost
-        }
-      end.compact.sort_by { |r| r[:cost] }
+        ShippingRate.new( :id => ship_method.id,
+                          :shipping_method => ship_method,
+                          :name => ship_method.name,
+                          :cost => cost)
+      end.compact.sort_by { |r| r.cost }
     end
 
     def payment
@@ -467,7 +460,7 @@ module Spree
             :next_state     => self.shipment_state,
             :name           => 'shipment',
             :user_id        => (User.respond_to?(:current) && User.current && User.current.id) || self.user_id
-          })
+          }, :without_protection => true)
         end
       end
 
@@ -497,7 +490,7 @@ module Spree
             :next_state     => self.payment_state,
             :name           => 'payment',
             :user_id        => (User.respond_to?(:current) && User.current && User.current.id) || self.user_id
-          })
+          }, :without_protection => true)
         end
       end
 
@@ -551,11 +544,8 @@ module Spree
       end
 
       def restock_items!
-        shipments.each do |shipment|
-          shipment.inventory_units.each do |inventory_unit|
-            line_item = line_items.find_by_variant_id(inventory_unit.variant_id)
-            InventoryUnit.decrease(self, inventory_unit.variant, line_item.quantity)
-          end
+        line_items.each do |line_item|
+          InventoryUnit.decrease(self, line_item.variant, line_item.quantity)
         end
       end
 
@@ -564,11 +554,8 @@ module Spree
       end
 
       def unstock_items!
-        shipments.each do |shipment|
-          shipment.inventory_units.each do |inventory_unit|
-            line_item = line_items.find_by_variant_id(inventory_unit.variant_id)
-            InventoryUnit.increase(self, inventory_unit.variant, line_item.quantity)
-          end
+        line_items.each do |line_item|
+          InventoryUnit.increase(self, line_item.variant, line_item.quantity)
         end
       end
 

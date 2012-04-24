@@ -1,7 +1,7 @@
 module Spree
   module Admin
     class OptionTypesController < ResourceController
-      before_filter :load_product, :only => [:selected, :available, :remove]
+      before_filter :load_product, :only => [:select, :selected, :available, :remove]
 
       def available
         set_available_option_types
@@ -15,8 +15,14 @@ module Spree
       def remove
         @product.option_types.delete(@option_type)
         @product.save
-        flash.notice = I18n.t('notice_messages.option_type_removed')
-        redirect_to selected_admin_product_option_types_url(@product)
+        @option_types = @product.option_types
+
+        respond_with(@option_types) do |format|
+          flash.notice = I18n.t('notice_messages.option_type_removed')
+
+          format.js { render_js_for_destroy }
+          format.html { redirect_to selected_admin_product_option_types_url(@product) }
+        end
       end
 
       def update_positions
@@ -32,7 +38,6 @@ module Spree
 
       # AJAX method for selecting an existing option type and associating with the current product
       def select
-        @product = Product.find_by_param!(params[:product_id])
         @product.option_types << OptionType.find(params[:id])
         @product.reload
         @option_types = @product.option_types
@@ -55,13 +60,12 @@ module Spree
           @product = Product.find_by_param!(params[:product_id])
         end
   
-        def set_available_option_types
-          @available_option_types = OptionType.all
-          selected_option_types = []
-          @product.options.each do |option|
-            selected_option_types << option.option_type
+        def set_available_option_types     
+          @available_option_types = if @product.option_type_ids.any?
+            OptionType.where('id NOT IN (?)', @product.option_type_ids)
+          else
+            OptionType.all
           end
-          @available_option_types.delete_if {|ot| selected_option_types.include? ot}
         end
     end
   end

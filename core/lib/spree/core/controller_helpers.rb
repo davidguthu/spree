@@ -2,8 +2,7 @@ module Spree
   module Core
     module ControllerHelpers
       def self.included(receiver)
-        receiver.send :layout, '/spree/layouts/spree_application'
-        receiver.send :helper, 'spree/hook'
+        receiver.send :layout, :get_layout
         receiver.send :before_filter, 'instantiate_controller_and_action_names'
         receiver.send :before_filter, 'set_user_language'
 
@@ -11,7 +10,6 @@ module Spree
         receiver.send :helper_method, 'title='
         receiver.send :helper_method, 'accurate_title'
         receiver.send :helper_method, 'get_taxonomies'
-        receiver.send :helper_method, 'current_gateway'
         receiver.send :helper_method, 'current_order'
         receiver.send :include, SslRequirement
         receiver.send :include, Spree::Core::CurrentOrder
@@ -84,11 +82,6 @@ module Spree
           @taxonomies ||= Taxonomy.includes(:root => :children).joins(:root)
         end
 
-        def current_gateway
-          ActiveSupport::Deprecation.warn "current_gateway is deprecated and will be removed in Spree > 1.0"
-          @current_gateway ||= Gateway.current
-        end
-        
         def associate_user
           return unless current_user and current_order
           current_order.associate_user!(current_user)
@@ -96,9 +89,21 @@ module Spree
         end
 
         def set_user_language
-          locale = session[:locale] || Spree::Config[:default_locale] || Rails.application.config.i18n.default_locale
-          locale = I18n.default_locale unless locale && I18n.available_locales.include?(locale.to_sym)
+          locale = session[:locale]
+          locale ||= Spree::Config[:default_locale] unless Spree::Config[:default_locale].blank?
+          locale ||= Rails.application.config.i18n.default_locale
+          locale ||= I18n.default_locale unless I18n.available_locales.include?(locale.to_sym)
           I18n.locale = locale.to_sym
+        end
+
+        # Returns which layout to render.
+        # 
+        # You can set the layout you want to render inside your Spree configuration with the +:layout+ option.
+        # 
+        # Default layout is: +app/views/spree/layouts/spree_application+
+        # 
+        def get_layout
+          layout ||= Spree::Config[:layout]
         end
     end
   end

@@ -11,7 +11,9 @@ Dir["#{File.dirname(__FILE__)}/support/**/*.rb"].each {|f| require f}
 require 'database_cleaner'
 require 'spree/core/testing_support/factories'
 require 'spree/core/testing_support/env'
-require 'spree/url_helpers'
+require 'spree/core/testing_support/controller_requests'
+require 'spree/core/url_helpers'
+require 'paperclip/matchers'
 
 RSpec.configure do |config|
   # == Mock Framework
@@ -48,7 +50,11 @@ RSpec.configure do |config|
     DatabaseCleaner.clean
   end
 
-  config.include Spree::UrlHelpers
+  config.include Spree::Core::UrlHelpers
+  config.include Spree::Core::TestingSupport::ControllerRequests
+
+
+  config.include Paperclip::Shoulda::Matchers
 end
 
 shared_context "custom products" do
@@ -88,22 +94,22 @@ shared_context "product prototype" do
   def build_option_type_with_values(name, values)
     ot = Factory(:option_type, :name => name)
     values.each do |val|
-      ot.option_values.create(:name => val.downcase, :presentation => val)
+      ot.option_values.create({:name => val.downcase, :presentation => val}, :without_protection => true)
     end
     ot
   end
-  
+
   let(:product_attributes) do
     # Factory.attributes_for is un-deprecated!
     #   https://github.com/thoughtbot/factory_girl/issues/274#issuecomment-3592054
-    Factory.attributes_for(:product)
+    Factory.attributes_for(:simple_product)
   end
-            
+
   let(:prototype) do
     size = build_option_type_with_values("size", %w(Small Medium Large))
     Factory(:prototype, :name => "Size", :option_types => [ size ])
   end
-  
+
   let(:option_values_hash) do
     hash = {}
     prototype.option_types.each do |i|
@@ -111,22 +117,11 @@ shared_context "product prototype" do
     end
     hash
   end
-  
-end  
+
+end
 
 
 
 PAYMENT_STATES = Spree::Payment.state_machine.states.keys unless defined? PAYMENT_STATES
 SHIPMENT_STATES = Spree::Shipment.state_machine.states.keys unless defined? SHIPMENT_STATES
 ORDER_STATES = Spree::Order.state_machine.states.keys unless defined? ORDER_STATES
-
-# Usage:
-#
-# context "factory" do
-#   it { should have_valid_factory(:address) }
-# end
-RSpec::Matchers.define :have_valid_factory do |factory_name|
-  match do |model|
-    Factory(factory_name).new_record?.should be_false
-  end
-end

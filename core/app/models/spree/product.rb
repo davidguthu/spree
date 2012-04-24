@@ -23,8 +23,6 @@ module Spree
     has_many :option_types, :through => :product_option_types
     has_many :product_properties, :dependent => :destroy
     has_many :properties, :through => :product_properties
-    has_many :images, :as => :viewable, :order => :position, :dependent => :destroy
-    has_and_belongs_to_many :product_groups, :join_table => 'spree_product_groups_products'
     belongs_to :tax_category
     has_and_belongs_to_many :taxons, :join_table => 'spree_products_taxons'
     belongs_to :shipping_category
@@ -40,7 +38,6 @@ module Spree
     after_create :add_properties_and_option_types_from_prototype
     after_create :build_variants_from_option_values_hash, :if => :option_values_hash
     before_save :recalculate_count_on_hand
-    after_save :update_memberships if ProductGroup.table_exists?
     after_save :save_master
     after_save :set_master_on_hand_to_zero_when_product_has_variants
 
@@ -59,23 +56,36 @@ module Spree
       :conditions => ["#{::Spree::Variant.quoted_table_name}.deleted_at IS NULL AND #{::Spree::Variant.quoted_table_name}.is_master = ?", true],
       :dependent => :destroy
 
+    accepts_nested_attributes_for :variants, :allow_destroy => true
+
     def variant_images
       Image.find_by_sql("SELECT #{Asset.quoted_table_name}.* FROM #{Asset.quoted_table_name} LEFT JOIN #{Variant.quoted_table_name} ON (#{Variant.quoted_table_name}.id = #{Asset.quoted_table_name}.viewable_id) WHERE (#{Variant.quoted_table_name}.product_id = #{self.id})")
     end
 
+    alias_method :images, :variant_images
+
     validates :name, :price, :permalink, :presence => true
 
     attr_accessor :option_values_hash
+
+    attr_accessible :name, :description, :available_on, :permalink, :meta_description,
+                    :meta_keywords, :price, :sku, :deleted_at, :prototype_id,
+                    :option_values_hash, :on_hand, :weight, :height, :width, :depth,
+                    :shipping_category_id, :tax_category_id, :product_properties_attributes
+
+    attr_accessible :cost_price if Variant.table_exists? && Variant.column_names.include?('cost_price')
+
+
     accepts_nested_attributes_for :product_properties, :allow_destroy => true, :reject_if => lambda { |pp| pp[:property_name].blank? }
 
-    make_permalink
+    make_permalink :order => :name
 
     alias :options :product_option_types
 
     after_initialize :ensure_master
 
     def ensure_master
-      return unless self.new_record?
+      return unless new_record?
       self.master ||= Variant.new
     end
 
@@ -85,7 +95,7 @@ module Spree
 
     # returns true if the product has any variants (the master variant is not a member of the variants array)
     def has_variants?
-      variants.any?
+      variants.exists?
     end
 
     # returns the number of inventory units "on_hand" for this product
@@ -100,8 +110,9 @@ module Spree
     end
 
     # Returns true if there are inventory units (any variant) with "on_hand" state for this product
+    # Variants take precedence over master
     def has_stock?
-      master.in_stock? || variants.any?(&:in_stock?)
+      has_variants? ? variants.any?(&:in_stock?) : master.in_stock?
     end
 
     def tax_category
@@ -118,60 +129,37 @@ module Spree
       @prototype_id = value.to_i
     end
 
-    def add_properties_and_option_types_from_prototype
-      if prototype_id && prototype = Spree::Prototype.find_by_id(prototype_id)
-        prototype.properties.each do |property|
-          product_properties.create(:property => property)
-        end
-        self.option_types = prototype.option_types
-      end
-    end
-
     # Ensures option_types and product_option_types exist for keys in option_values_hash
     def ensure_option_types_exist_for_values_hash
       return if option_values_hash.nil?
       option_values_hash.keys.map(&:to_i).each do |id|
-        self.option_type_ids << id unless self.option_type_ids.include?(id)
-        self.product_option_types.create(:option_type_id => id) unless product_option_types.map(&:option_type_id).include?(id)
+        self.option_type_ids << id unless option_type_ids.include?(id)
+        product_option_types.create({:option_type_id => id}, :without_protection => true) unless product_option_types.map(&:option_type_id).include?(id)
       end
-    end
-
-    # Builds variants from a hash of option types & values
-    def build_variants_from_option_values_hash
-      ensure_option_types_exist_for_values_hash
-      opts = Spree::Core::CartesianArray.new(*option_values_hash.values).product
-      opts.each do |ids|
-        variant = self.variants.create(:option_value_ids => ids, :price => self.master.price)
-      end
-      save
     end
 
     # for adding products which are closely related to existing ones
     # define "duplicate_extra" for site-specific actions, eg for additional fields
     def duplicate
       p = self.dup
-      p.name = 'COPY OF ' + self.name
+      p.name = 'COPY OF ' + name
       p.deleted_at = nil
       p.created_at = p.updated_at = nil
-      p.taxons = self.taxons
+      p.taxons = taxons
 
-      p.product_properties = self.product_properties.map { |q| r = q.dup; r.created_at = r.updated_at = nil; r }
+      p.product_properties = product_properties.map { |q| r = q.dup; r.created_at = r.updated_at = nil; r }
 
       image_dup = lambda { |i| j = i.dup; j.attachment = i.attachment.clone; j }
-      p.images = self.images.map { |i| image_dup.call i }
 
-      master = Spree::Variant.find_by_product_id_and_is_master(self.id, true)
       variant = master.dup
       variant.sku = 'COPY OF ' + master.sku
       variant.deleted_at = nil
       variant.images = master.images.map { |i| image_dup.call i }
       p.master = variant
 
-      if self.has_variants?
-        # don't dup the actual variants, just the characterising types
-        p.option_types = self.option_types
-      else
-      end
+      # don't dup the actual variants, just the characterising types
+      p.option_types = option_types if has_variants?
+        
       # allow site to do some customization
       p.send(:duplicate_extra, self) if p.respond_to?(:duplicate_extra)
       p.save!
@@ -193,7 +181,7 @@ module Spree
     end
 
     def effective_tax_rate
-      if self.tax_category
+      if tax_category
         tax_category.effective_amount
       else
         TaxRate.default
@@ -212,6 +200,27 @@ module Spree
     end
 
     private
+
+      # Builds variants from a hash of option types & values
+      def build_variants_from_option_values_hash
+        ensure_option_types_exist_for_values_hash
+        values = option_values_hash.values
+        values = values.inject(values.shift) { |memo, value| memo.product(value).map(&:flatten) }
+
+        values.each do |ids|
+          variant = variants.create({ :option_value_ids => ids, :price => master.price }, :without_protection => true)
+        end
+        save
+      end
+
+      def add_properties_and_option_types_from_prototype
+        if prototype_id && prototype = Spree::Prototype.find_by_id(prototype_id)
+          prototype.properties.each do |property|
+            product_properties.create({:property => property}, :without_protection => true)
+          end
+          self.option_types = prototype.option_types
+        end
+      end
 
       def recalculate_count_on_hand
         product_count_on_hand = has_variants? ?
@@ -234,10 +243,6 @@ module Spree
       # when saving so we force a save using a hook.
       def save_master
         master.save if master && (master.changed? || master.new_record?)
-      end
-
-      def update_memberships
-        self.product_groups = ProductGroup.all.select { |pg| pg.include?(self) }
       end
   end
 end

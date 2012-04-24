@@ -6,6 +6,8 @@ module Spree
 
     preference :server, :string, :default => 'test'
     preference :test_mode, :boolean, :default => true
+    
+    attr_accessible :preferred_server, :preferred_test_mode
 
     def payment_source_class
       Creditcard
@@ -25,7 +27,7 @@ module Spree
 
     def options
       options_hash = {}
-      self.preferences.each do |key,value|
+      self.preferences.each do |key, value|
         options_hash[key.to_sym] = value
       end
       options_hash

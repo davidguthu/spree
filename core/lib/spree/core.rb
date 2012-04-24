@@ -34,8 +34,9 @@ require 'kaminari'
 require 'nested_set'
 require 'acts_as_list'
 require 'active_merchant'
-require 'meta_search'
+require 'ransack'
 require 'jquery-rails'
+require 'deface'
 
 module Spree
   module Core
@@ -61,14 +62,12 @@ require 'spree/core/ext/hash'
 
 require 'spree/core/delegate_belongs_to'
 
-require 'spree/core/theme_support'
 require 'spree/core/responder'
 require 'spree/core/respond_with'
 require 'spree/core/ssl_requirement'
 require 'spree/core/store_helpers'
 require 'spree/core/file_utilz'
 require 'spree/core/calculated_adjustments'
-require 'spree/core/cartesian_array'
 require 'spree/core/current_order'
 require 'spree/core/mail_settings'
 require 'spree/core/mail_interceptor'

@@ -9,6 +9,8 @@ module Spree
     validates :amount, :numericality => true
     validate :must_have_shipped_units
 
+    attr_accessible :amount, :reason
+
     state_machine :initial => 'authorized' do
       after_transition :to => 'received', :do => :process_return
 
@@ -21,8 +23,8 @@ module Spree
     end
 
     def add_variant(variant_id, quantity)
-      order_units = self.order.inventory_units.group_by(&:variant_id)
-      returned_units = self.inventory_units.group_by(&:variant_id)
+      order_units = order.inventory_units.group_by(&:variant_id)
+      returned_units = inventory_units.group_by(&:variant_id)
 
       count = 0
 
@@ -44,7 +46,7 @@ module Spree
         end
       end
 
-      self.order.authorize_return! if self.inventory_units.reload.size > 0 && !self.order.awaiting_return?
+      order.authorize_return! if inventory_units.reload.size > 0 && !order.awaiting_return?
     end
 
     private
@@ -53,7 +55,7 @@ module Spree
       end
 
       def generate_number
-        return if self.number
+        return if number
 
         record = true
         while record
@@ -65,8 +67,8 @@ module Spree
 
       def process_return
         inventory_units.each &:return!
-        credit = Adjustment.create(:source => self, :order_id => self.order.id, :amount => self.amount.abs * -1, :label => I18n.t(:rma_credit))
-        self.order.update!
+        credit = Adjustment.create(:source => self, :adjustable => order, :amount => amount.abs * -1, :label => I18n.t(:rma_credit))
+        order.update!
       end
 
       def allow_receive?
@@ -74,7 +76,7 @@ module Spree
       end
 
       def force_positive_amount
-        self.amount = self.amount.abs
+        self.amount = amount.abs
       end
   end
 end

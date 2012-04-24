@@ -8,6 +8,8 @@ describe "Shipping Methods" do
   end
 
   before(:each) do
+    # HACK: To work around no email prompting on check out
+    Spree::Order.any_instance.stub(:require_email => false)
     PAYMENT_STATES = Spree::Payment.state_machine.states.keys unless defined? PAYMENT_STATES
     SHIPMENT_STATES = Spree::Shipment.state_machine.states.keys unless defined? SHIPMENT_STATES
     ORDER_STATES = Spree::Order.state_machine.states.keys unless defined? ORDER_STATES
@@ -15,7 +17,6 @@ describe "Shipping Methods" do
     Factory(:shipping_method, :zone => Spree::Zone.find_by_name('North America'))
     @product = Factory(:product, :name => "Mug")
 
-    sign_in_as!(Factory(:admin_user))
     visit spree.admin_path
     click_link "Configuration"
   end
@@ -43,6 +44,19 @@ describe "Shipping Methods" do
       click_button "Create"
       page.should have_content("successfully created!")
       page.should have_content("Editing Shipping Method")
+    end
+  end
+
+  # Regression test for #1331
+  context "update" do
+    it "can change the calculator", :js => true do
+      click_link "Shipping Methods"
+      within("#listing_shipping_methods") do
+        click_link "Edit"
+      end
+
+      click_button "Update"
+      page.should_not have_content("Shipping method is not found")
     end
   end
 

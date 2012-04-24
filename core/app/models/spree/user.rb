@@ -3,6 +3,8 @@ module Spree
   class User < ActiveRecord::Base
     include Core::UserBanners
 
+    attr_accessible :email, :password, :password_confirmation
+
     has_many :orders
 
     belongs_to :ship_address, :foreign_key => 'ship_address_id', :class_name => 'Spree::Address'

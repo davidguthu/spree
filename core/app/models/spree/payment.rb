@@ -1,5 +1,6 @@
 module Spree
   class Payment < ActiveRecord::Base
+    include Spree::Payment::Processing
     belongs_to :order
     belongs_to :source, :polymorphic => true, :validate => true
     belongs_to :payment_method
@@ -15,6 +16,8 @@ module Spree
     attr_accessor :source_attributes
     after_initialize :build_source
 
+    attr_accessible :amount, :payment_method_id, :source_attributes
+
     scope :from_creditcard, where(:source_type => 'Spree::Creditcard')
     scope :with_state, lambda { |s| where(:state => s) }
     scope :completed, with_state('completed')
@@ -25,7 +28,7 @@ module Spree
     state_machine :initial => 'checkout' do
       # With card payments, happens before purchase or authorization happens
       event :started_processing do
-        transition :from => ['checkout', 'pending', 'completed'], :to => 'processing'
+        transition :from => ['checkout', 'pending', 'completed', 'processing'], :to => 'processing'
       end
       # When processing during checkout fails
       event :failure do
@@ -56,31 +59,11 @@ module Spree
       credit_allowed > 0
     end
 
-    def credit(amount)
-      return if amount > credit_allowed
-      started_processing!
-      source.credit(self, amount)
-    end
-    
     # see https://github.com/spree/spree/issues/981
     def build_source
       return if source_attributes.nil?
-
       if payment_method and payment_method.payment_source_class
         self.source = payment_method.payment_source_class.new(source_attributes)
-      end
-    end
-
-    def process!
-      if payment_method && payment_method.source_required?
-        if source
-          if !processing? && source.respond_to?(:process!)
-            started_processing!
-            source.process!(self) # source is responsible for updating the payment state when it's done processing
-          end
-        else
-          raise Core::GatewayError.new(I18n.t(:payment_processing_failed))
-        end
       end
     end
 

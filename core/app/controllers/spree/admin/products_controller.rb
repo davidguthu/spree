@@ -8,6 +8,10 @@ module Spree
       create.before :create_before
       update.before :update_before
 
+      def show
+        redirect_to( :action => :edit )
+      end
+
       def index
         respond_with(@collection) do |format|
           format.html
@@ -75,18 +79,26 @@ module Spree
           return @collection if @collection.present?
 
           unless request.xhr?
-            params[:search] ||= {}
-            # Note: the MetaSearch scopes are on/off switches, so we need to select "not_deleted" explicitly if the switch is off
-            if params[:search][:deleted_at_is_null].nil?
-              params[:search][:deleted_at_is_null] = "1"
+            params[:q] ||= {}
+            params[:q][:deleted_at_null] ||= "1"
+
+            params[:q][:s] ||= "name asc"
+
+            @search = super.search(params[:q])
+            @collection = @search.result.
+              group_by_products_id.
+              includes([:master, {:variants => [:images, :option_values]}]).
+              page(params[:page]).
+              per(Spree::Config[:admin_products_per_page])
+
+            if params[:q][:s].include?("master_price")
+              # By applying the group in the main query we get an undefined method gsub for Arel::Nodes::Descending
+              # It seems to only work when the price is actually being sorted in the query
+              # To be investigated later.
+              @collection = @collection.group("spree_variants.price")
             end
-
-            params[:search][:meta_sort] ||= "name.asc"
-            @search = super.metasearch(params[:search])
-
-            @collection = @search.relation.group_by_products_id.includes([:master, {:variants => [:images, :option_values]}]).page(params[:page]).per(Spree::Config[:admin_products_per_page])
           else
-            includes = [{:variants => [:images,  {:option_values => :option_type}]}, :master, :images]
+            includes = [{:variants => [:images,  {:option_values => :option_type}]}, {:master => :images}]
 
             @collection = super.where(["name #{LIKE} ?", "%#{params[:q]}%"])
             @collection = @collection.includes(includes).limit(params[:limit] || 10)
@@ -94,10 +106,8 @@ module Spree
             tmp = super.where(["#{Variant.table_name}.sku #{LIKE} ?", "%#{params[:q]}%"])
             tmp = tmp.includes(:variants_including_master).limit(params[:limit] || 10)
             @collection.concat(tmp)
-
-            @collection.uniq
           end
-
+          @collection
         end
 
         def create_before
@@ -110,7 +120,6 @@ module Spree
           return unless params[:clear_product_properties]
           params[:product] ||= {}
         end
-
     end
   end
 end

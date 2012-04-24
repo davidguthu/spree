@@ -63,11 +63,11 @@ module Spree
         options.reverse_merge! :caption => t(:are_you_sure)
         options.reverse_merge! :title => t(:confirm_delete)
         options.reverse_merge! :dataType => 'script'
-        options.reverse_merge! :success => "function(r){ $('##{dom_id resource}').fadeOut('hide'); }"
+        options.reverse_merge! :success => "function(r){ $('##{spree_dom_id resource}').fadeOut('hide'); }"
         options.reverse_merge! :error => "function(jqXHR, textStatus, errorThrown){ show_flash_error(jqXHR.responseText); }"
         options.reverse_merge! :name => icon('delete') + ' ' + t(:delete)
 
-        link_to_function_delete(options, html_options)
+        link_to_function_delete(options, html_options.merge!(:href => options[:url]))
         #link_to_function_delete_native(options, html_options)
       end
 
@@ -109,15 +109,15 @@ module Spree
       end
 
       def button(text, icon_name = nil, button_type = 'submit', options={})
-        content_tag('button', content_tag('span', icon(icon_name) + ' ' + text), options.merge(:type => button_type))
+        button_tag(content_tag('span', icon(icon_name) + ' ' + text), options.merge(:type => button_type))
       end
 
       def button_link_to(text, url, html_options = {})
         if (html_options[:method] &&
             html_options[:method].to_s.downcase != 'get' &&
             !html_options[:remote])
-          form_tag(url, :method => html_options[:method]) do
-            button(text, html_options[:icon])
+          form_tag(url, :method => html_options.delete(:method)) do
+            button(text, html_options.delete(:icon), nil, html_options)
           end
         else
           if html_options['data-update'].nil? && html_options[:remote]
@@ -132,18 +132,6 @@ module Spree
       def button_link_to_function(text, function, html_options = {})
         link_to_function(text_for_button_link(text, html_options), function, html_options_for_button_link(html_options))
       end
-
-      # RAILS 3 TODO - no longer needed
-      # def button_link_to_remote(text, url, html_options = {})
-      #   html_options.reverse_merge! :remote => true
-      #   link_to(text_for_button_link(text, html_options), url, html_options_for_button_link(html_options))
-      # end
-      #
-      # def link_to_remote(name, options = {}, html_options = {})
-      #   options[:before] ||= "jQuery(this).parent().hide(); jQuery('#busy_indicator').show();"
-      #   options[:complete] ||= "jQuery('#busy_indicator').hide()"
-      #   link_to_function(name, remote_function(options), html_options || options.delete(:html))
-      # end
 
       def text_for_button_link(text, html_options)
         s = ''

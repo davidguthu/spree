@@ -5,10 +5,6 @@ describe Spree::LineItem do
     reset_spree_preferences
   end
 
-  context 'validation' do
-    it { should have_valid_factory(:line_item) }
-  end
-
   let(:variant) { mock_model(Spree::Variant, :count_on_hand => 95, :price => 9.99) }
   let(:line_item) { Spree::LineItem.new(:quantity => 5) }
   let(:order) do
@@ -164,7 +160,7 @@ describe Spree::LineItem do
     before do
       shipping_method = mock_model(Spree::ShippingMethod, :calculator => mock(:calculator))
       shipment = Spree::Shipment.new :order => order, :state => 'shipped', :shipping_method => shipping_method
-      inventory_units = 5.times.map { Spree::InventoryUnit.new :variant => line_item.variant }
+      inventory_units = 5.times.map { Spree::InventoryUnit.new({:variant => line_item.variant}, :without_protection => true) }
       order.stub(:shipments => [shipment])
       shipment.stub(:inventory_units => inventory_units)
     end

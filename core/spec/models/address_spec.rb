@@ -1,19 +1,6 @@
 require 'spec_helper'
 
 describe Spree::Address do
-  context "validations" do
-    it { should belong_to(:country) }
-    it { should belong_to(:state) }
-    it { should have_many(:shipments) }
-    it { should validate_presence_of(:firstname) }
-    it { should validate_presence_of(:lastname) }
-    it { should validate_presence_of(:address1) }
-    it { should validate_presence_of(:city) }
-    it { should validate_presence_of(:zipcode) }
-    it { should validate_presence_of(:country) }
-    it { should validate_presence_of(:phone) }
-  end
-
   describe "clone" do
     it "creates a copy of the address with the exception of the id, updated_at and created_at attributes" do
       state = Factory(:state)
@@ -138,7 +125,7 @@ describe Spree::Address do
       Spree::Config[:default_country_id] = @default_country_id
     end
     it "sets up a new record with Spree::Config[:default_country_id]" do
-      Spree::Address.default.country.should == Spree::Country.find_by_id(Spree::Config[:default_country_id])
+      Spree::Address.default.country.should == Spree::Country.find(Spree::Config[:default_country_id])
     end
 
     # Regression test for #1142
@@ -149,8 +136,26 @@ describe Spree::Address do
   end
 
   context '#full_name' do
-    let(:address) { stub_model(Spree::Address, :firstname => 'Michael', :lastname => 'Jackson') }
-    specify { address.full_name.should == 'Michael Jackson' }
+    context 'both first and last names are present' do
+      let(:address) { stub_model(Spree::Address, :firstname => 'Michael', :lastname => 'Jackson') }
+      specify { address.full_name.should == 'Michael Jackson' }
+    end
+
+    context 'first name is blank' do
+      let(:address) { stub_model(Spree::Address, :firstname => nil, :lastname => 'Jackson') }
+      specify { address.full_name.should == 'Jackson' }
+    end
+
+    context 'last name is blank' do
+      let(:address) { stub_model(Spree::Address, :firstname => 'Michael', :lastname => nil) }
+      specify { address.full_name.should == 'Michael' }
+    end
+
+    context 'both first and last names are blank' do
+      let(:address) { stub_model(Spree::Address, :firstname => nil, :lastname => nil) }
+      specify { address.full_name.should == '' }
+    end
+
   end
 
   context '#state_text' do

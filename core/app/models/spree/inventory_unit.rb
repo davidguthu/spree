@@ -99,17 +99,19 @@ module Spree
 
         shipment = order.shipments.detect { |shipment| !shipment.shipped? }
 
-        sold.times { order.inventory_units.create(:variant => variant, :state => 'sold', :shipment => shipment) }
-        back_order.times { order.inventory_units.create(:variant => variant, :state => 'backordered', :shipment => shipment) }
+        attr_accessible :shipment
+
+        sold.times { order.inventory_units.create({:variant => variant, :state => 'sold', :shipment => shipment}, :without_protection => true) }
+        back_order.times { order.inventory_units.create({:variant => variant, :state => 'backordered', :shipment => shipment}, :without_protection => true) }
       end
 
       def update_order
-        self.order.update!
+        order.update!
       end
 
       def restock_variant
-        self.variant.on_hand = (self.variant.on_hand + 1)
-        self.variant.save
+        variant.on_hand = (variant.on_hand + 1)
+        variant.save
       end
   end
 end

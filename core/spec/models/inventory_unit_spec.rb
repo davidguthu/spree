@@ -5,10 +5,6 @@ describe Spree::InventoryUnit do
     reset_spree_preferences
   end
 
-  context 'validation' do
-    it { should have_valid_factory(:inventory_unit) }
-  end
-
   let(:variant) { mock_model(Spree::Variant, :on_hand => 95) }
   let(:line_item) { mock_model(Spree::LineItem, :variant => variant, :quantity => 5) }
   let(:order) { mock_model(Spree::Order, :line_items => [line_item], :inventory_units => [], :shipments => mock('shipments'), :completed? => true) }
@@ -202,8 +198,8 @@ describe Spree::InventoryUnit do
       before { Spree::Config.set :allow_backorders => true }
 
       it "should create both sold and backordered units" do
-        order.inventory_units.should_receive(:create).with(:variant => variant, :state => "sold", :shipment => shipment).exactly(2).times
-        order.inventory_units.should_receive(:create).with(:variant => variant, :state => "backordered", :shipment => shipment).exactly(3).times
+        order.inventory_units.should_receive(:create).with({:variant => variant, :state => "sold", :shipment => shipment}, :without_protection => true).exactly(2).times
+        order.inventory_units.should_receive(:create).with({:variant => variant, :state => "backordered", :shipment => shipment}, :without_protection => true).exactly(3).times
         Spree::InventoryUnit.create_units(order, variant, 2, 3)
       end
 
@@ -213,7 +209,7 @@ describe Spree::InventoryUnit do
       before { Spree::Config.set :allow_backorders => false }
 
       it "should create sold items" do
-        order.inventory_units.should_receive(:create).with(:variant => variant, :state => "sold", :shipment => shipment).exactly(2).times
+        order.inventory_units.should_receive(:create).with({:variant => variant, :state => "sold", :shipment => shipment}, :without_protection => true).exactly(2).times
         Spree::InventoryUnit.create_units(order, variant, 2, 0)
       end
 
@@ -245,7 +241,7 @@ describe Spree::InventoryUnit do
   end
 
   context "return!" do
-    let(:inventory_unit) { Spree::InventoryUnit.create(:state => "shipped", :variant => mock_model(Spree::Variant, :on_hand => 95)) }
+    let(:inventory_unit) { Spree::InventoryUnit.create({:state => "shipped", :variant => mock_model(Spree::Variant, :on_hand => 95)}, :without_protection => true) }
 
     it "should update on_hand for variant" do
       inventory_unit.variant.should_receive(:on_hand=).with(96)
